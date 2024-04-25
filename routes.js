@@ -1,27 +1,124 @@
 const { Router } = require("express");
 const router = Router();
-const jwt = require("jsonwebtoken");
-const userDb = require("./userDb");
-const notesDb = require("./notesDb");
+const jwt = require("./jwt.js");
+const db = require("./db.js");
 const bcrypt = require("./bcrypt.js");
 
 //user routes
+//creates account
 router.post("/user/signup", async (req, res) => {
   const { username, password } = req.body;
+  try {
+    const userNameTaken = await db.findUser(username);
+    if (userNameTaken) {
+      res.status(400).json({ message: "Username already exists" });
+      return;
+    }
+    const hashedPassword = await bcrypt.hashPassword(password);
+    const newUser = await db.addUser(username, hashedPassword);
+    res.status(200).json({
+      sucess: true,
+      message: "new user added",
+    });
+  } catch (error) {
+    res.status(500).json({ error: "internal server problems" });
+  }
 });
+
+//login account
 router.post("/user/login", async (req, res) => {
   const { username, password } = req.body;
+  try {
+    //check if user exists
+    const user = await db.findUser(username);
+    if (!user) {
+      res.status(404).json({ message: "User don't exists" });
+      return;
+    }
+    //check if password is correct, if not correct password message will be sent
+    const correctPassword = await bcrypt.comparePassword(
+      password,
+      user.password
+    );
+    if (!correctPassword) {
+      res.status(404).json({ message: "Wrong password" });
+      return;
+    }
+    const token = jwt.createToken(user._id);
+    res
+      .status(200)
+      .json({ sucess: true, message: "sucessfully logged in", token: token });
+  } catch (error) {
+    res.status(500).json({ error: "internal server problems" });
+  }
 });
 
 //endpoints for notes
-router.get("/notes", async (req, res) => {});
+router.get("/notes", async (req, res) => {
+  try {
+    const notes = db.findAllNotes();
+    res.status(200).json({ sucess: true, message: notes });
+  } catch (error) {
+    res.status(500).json({ error: "internal server problems" });
+  }
+});
 
-router.post("/notes/create", async (req, res) => {});
+router.post("/notes/create", async (req, res) => {
+  const headerToken = req.headers.authorization;
+  const token = headerToken.replace("Bearer ", "");
+  const { title, text } = req.body;
+  const newNote = { title, text };
+  try {
+    const tokenData = jwt.isTokenValid(token);
+    console.log(tokenData);
+    if (tokenData) {
+      console.log(newNote);
+      if (!title || !text) {
+        res
+          .status(418)
+          .json({ error: "both title and text are required, try again" });
+        return;
+      }
+      //create dates & adds userId to the note
+      const createdAt = new Date();
+      const modifiedAt = createdAt;
+      newNote.createdAt = createdAt;
+      newNote.modifiedAt = modifiedAt;
+      newNote.userId = tokenData.id;
+      console.log(createdAt);
 
-router.put("/notes/update", async (req, res) => {});
+      //adds note to notes.db
+      const addedNote = await db.addNote(newNote);
+      res.status(200).json({ success: true, message: newNote });
+    }
+  } catch (error) {
+    res.status(401).json({ error: "Invalid token" });
+    return;
+  }
+});
 
-router.delete("/notes/delete", async (req, res) => {});
+router.put("/notes/update", async (req, res) => {
+  try {
+    const tokenData = jwt.isTokenValid(token);
+  } catch {
+    res.status(500).json({ error: "internal server problems" });
+  }
+});
 
-router.get("/notes/search", async (req, res) => {});
+router.delete("/notes/delete", async (req, res) => {
+  try {
+    const tokenData = jwt.isTokenValid(token);
+  } catch {
+    res.status(500).json({ error: "internal server problems" });
+  }
+});
+
+router.get("/notes/search", async (req, res) => {
+  try {
+    const tokenData = jwt.isTokenValid(token);
+  } catch {
+    res.status(500).json({ error: "internal server problems" });
+  }
+});
 
 module.exports = { router };
