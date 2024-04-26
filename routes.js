@@ -98,24 +98,64 @@ router.post("/notes/create", async (req, res) => {
 });
 
 router.put("/notes/update", async (req, res) => {
+  const { id, title, text } = req.body;
+  const newNoteInfo = { id, title, text };
+  const headerToken = req.headers.authorization;
+  const token = headerToken.replace("Bearer ", "");
   try {
     const tokenData = jwt.isTokenValid(token);
+    if (tokenData) {
+      const updatedNote = await db.updateNote(newNoteInfo);
+      res
+        .status(200)
+        .json({ success: true, message: "note have been updated!" });
+    }
   } catch {
     res.status(500).json({ error: "internal server problems" });
   }
 });
 
 router.delete("/notes/delete", async (req, res) => {
+  const { _id } = req.body;
+  const headerToken = req.headers.authorization;
+  const token = headerToken.replace("Bearer ", "");
+  const noteId = { _id };
+
   try {
     const tokenData = jwt.isTokenValid(token);
+    if (tokenData) {
+      const foundedNote = await db.searchNote(noteId);
+      if (!foundedNote) {
+        res.status(404).json({ message: "note could not be found" });
+        return;
+      }
+      await db.deleteNote(foundedNote);
+      res
+        .status(200)
+        .json({ sucess: true, message: "Your note have been deleted!" });
+    }
   } catch {
     res.status(500).json({ error: "internal server problems" });
   }
 });
 
 router.get("/notes/search", async (req, res) => {
+  const { title } = req.query;
+  const noteTitle = { title };
+  const headerToken = req.headers.authorization;
+  const token = headerToken.replace("Bearer ", "");
+  console.log(noteTitle);
   try {
     const tokenData = jwt.isTokenValid(token);
+    if (tokenData) {
+      const foundedNote = await db.searchNote(noteTitle);
+      console.log(foundedNote);
+      if (!foundedNote) {
+        res.status(404).json({ message: "no note could be found" });
+        return;
+      }
+      res.status(200).json({ success: true, message: foundedNote });
+    }
   } catch {
     res.status(500).json({ error: "internal server problems" });
   }
