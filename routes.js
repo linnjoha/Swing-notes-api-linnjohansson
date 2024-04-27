@@ -55,15 +55,26 @@ router.post("/user/login", async (req, res) => {
 
 //endpoints for notes
 router.get("/notes", async (req, res) => {
+  const headerToken = req.headers.authorization;
+  const token = headerToken.replace("Bearer ", "");
+
   try {
-    const notes = db.findAllNotes();
-    res.status(200).json({ sucess: true, message: notes });
+    const tokenData = jwt.isTokenValid(token);
+    if (tokenData) {
+      try {
+        const foundedNotes = await db.findAllNotes();
+        res.status(200).json({ sucess: true, message: foundedNotes });
+      } catch (error) {
+        res.status(500).json({ error: "internal server problems" });
+      }
+    }
+    // const notes = db.findAllNotes();
   } catch (error) {
-    res.status(500).json({ error: "internal server problems" });
+    res.status(400).json({ error: "invalid token" });
   }
 });
 
-router.post("/notes/create", async (req, res) => {
+router.post("/notes", async (req, res) => {
   const headerToken = req.headers.authorization;
   const token = headerToken.replace("Bearer ", "");
   const { title, text } = req.body;
@@ -72,50 +83,64 @@ router.post("/notes/create", async (req, res) => {
     const tokenData = jwt.isTokenValid(token);
     console.log(tokenData);
     if (tokenData) {
-      console.log(newNote);
-      if (!title || !text) {
-        res
-          .status(418)
-          .json({ error: "both title and text are required, try again" });
-        return;
-      }
-      //create dates & adds userId to the note
-      const createdAt = new Date();
-      const modifiedAt = createdAt;
-      newNote.createdAt = createdAt;
-      newNote.modifiedAt = modifiedAt;
-      newNote.userId = tokenData.id;
-      console.log(createdAt);
+      try {
+        if (!title || !text) {
+          res
+            .status(418)
+            .json({ error: "both title and text are required, try again" });
+          return;
+        }
+        //create date & adds userId to the note
+        const createdAt = new Date();
+        const modifiedAt = createdAt;
+        newNote.createdAt = createdAt;
+        newNote.modifiedAt = modifiedAt;
+        newNote.userId = tokenData.id;
+        console.log(createdAt);
 
-      //adds note to notes.db
-      const addedNote = await db.addNote(newNote);
-      res.status(200).json({ success: true, message: newNote });
+        //adds note to notes.db
+        const addedNote = await db.addNote(newNote);
+        res.status(200).json({ success: true, message: newNote });
+      } catch (error) {
+        res.status(500).json({ error: "internal server problems" });
+      }
+      console.log(newNote);
     }
   } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
+    res.status(400).json({ error: "invalid token" });
     return;
   }
 });
 
-router.put("/notes/update", async (req, res) => {
-  const { id, title, text } = req.body;
-  const newNoteInfo = { id, title, text };
+router.put("/notes", async (req, res) => {
+  const { _id, title, text } = req.body;
+  const newNoteInfo = { _id, title, text };
   const headerToken = req.headers.authorization;
   const token = headerToken.replace("Bearer ", "");
   try {
     const tokenData = jwt.isTokenValid(token);
+    //if token i valid we search for note and sends the founded note toghether with the new info.
     if (tokenData) {
-      const updatedNote = await db.updateNote(newNoteInfo);
-      res
-        .status(200)
-        .json({ success: true, message: "note have been updated!" });
+      try {
+        const foundedNote = await db.searchNote(newNoteInfo);
+        if (!foundedNote) {
+          res.status(404).json({ message: "No note found with given id" });
+          return;
+        }
+        const updatedNote = await db.updateNote(foundedNote, newNoteInfo);
+        res
+          .status(200)
+          .json({ success: true, message: "note have been updated!" });
+      } catch (error) {
+        res.status(500).json({ error: "internal server problems" });
+      }
     }
-  } catch {
-    res.status(500).json({ error: "internal server problems" });
+  } catch (error) {
+    res.status(400).json({ error: "invalid token" });
   }
 });
 
-router.delete("/notes/delete", async (req, res) => {
+router.delete("/notes", async (req, res) => {
   const { _id } = req.body;
   const headerToken = req.headers.authorization;
   const token = headerToken.replace("Bearer ", "");
@@ -124,18 +149,22 @@ router.delete("/notes/delete", async (req, res) => {
   try {
     const tokenData = jwt.isTokenValid(token);
     if (tokenData) {
-      const foundedNote = await db.searchNote(noteId);
-      if (!foundedNote) {
-        res.status(404).json({ message: "note could not be found" });
-        return;
+      try {
+        const foundedNote = await db.searchNote(noteId);
+        if (!foundedNote) {
+          res.status(404).json({ message: "note could not be found" });
+          return;
+        }
+        await db.deleteNote(foundedNote);
+        res
+          .status(200)
+          .json({ sucess: true, message: "Your note have been deleted!" });
+      } catch (error) {
+        res.status(500).json({ error: "internal server problems" });
       }
-      await db.deleteNote(foundedNote);
-      res
-        .status(200)
-        .json({ sucess: true, message: "Your note have been deleted!" });
     }
-  } catch {
-    res.status(500).json({ error: "internal server problems" });
+  } catch (error) {
+    res.status(400).json({ error: "invalid token" });
   }
 });
 
@@ -144,20 +173,26 @@ router.get("/notes/search", async (req, res) => {
   const noteTitle = { title };
   const headerToken = req.headers.authorization;
   const token = headerToken.replace("Bearer ", "");
-  console.log(noteTitle);
+
   try {
     const tokenData = jwt.isTokenValid(token);
     if (tokenData) {
-      const foundedNote = await db.searchNote(noteTitle);
-      console.log(foundedNote);
-      if (!foundedNote) {
-        res.status(404).json({ message: "no note could be found" });
-        return;
+      try {
+        const foundedNote = await db.searchNote(noteTitle);
+        console.log(foundedNote);
+        if (!foundedNote) {
+          res.status(404).json({
+            message: "no note could be found, try search with full title",
+          });
+          return;
+        }
+        res.status(200).json({ success: true, message: foundedNote });
+      } catch (error) {
+        res.status(500).json({ error: "internal server problems" });
       }
-      res.status(200).json({ success: true, message: foundedNote });
     }
   } catch {
-    res.status(500).json({ error: "internal server problems" });
+    res.status(400).json({ error: "invalid token" });
   }
 });
 

@@ -21,14 +21,13 @@ const addNote = (note) => {
   return db.notes.insert(note);
 };
 
+//serach for note with _id or title
 const searchNote = (note) => {
   return db.notes.findOne({ $or: [{ _id: note._id }, { title: note.title }] });
-  // return await db.notes.findOne({ _id: note._id });
 };
 
-const updateNote = async (note) => {
-  const foundedNote = await db.notes.findOne({ _id: note.id });
-  const updatedNote = await db.notes.update(
+const updateNote = (foundedNote, note) => {
+  const updatedNote = db.notes.update(
     {
       title: foundedNote.title,
       text: foundedNote.text,
