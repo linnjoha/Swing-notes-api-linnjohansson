@@ -1,4 +1,5 @@
 const nedb = require("nedb-promise");
+const createDate = require("./createDate");
 
 const db = {};
 db.users = new nedb({ filename: "users.db", autoload: true });
@@ -33,7 +34,13 @@ const updateNote = (foundedNote, note) => {
       text: foundedNote.text,
       modifiedAt: foundedNote.modifiedAt,
     },
-    { $set: { title: note.title, text: note.text, modifiedAt: new Date() } }
+    {
+      $set: {
+        title: note.title,
+        text: note.text,
+        modifiedAt: createDate.createDate(),
+      },
+    }
   );
   return updatedNote;
 };

@@ -3,12 +3,19 @@ const router = Router();
 const jwt = require("./jwt.js");
 const db = require("./db.js");
 const bcrypt = require("./bcrypt.js");
-
+const createDate = require("./createDate.js");
+const { v4: uuidv4 } = require("uuid");
 //user routes
 //creates account
 router.post("/user/signup", async (req, res) => {
   const { username, password } = req.body;
   try {
+    if (!username || !password) {
+      res
+        .status(418)
+        .json({ error: "both username and password are required, try again" });
+      return;
+    }
     const userNameTaken = await db.findUser(username);
     if (userNameTaken) {
       res.status(400).json({ message: "Username already exists" });
@@ -55,8 +62,7 @@ router.post("/user/login", async (req, res) => {
 
 //endpoints for notes
 router.get("/notes", async (req, res) => {
-  const headerToken = req.headers.authorization;
-  const token = headerToken.replace("Bearer ", "");
+  const token = req.headers.authorization;
 
   try {
     const tokenData = jwt.isTokenValid(token);
@@ -74,9 +80,9 @@ router.get("/notes", async (req, res) => {
   }
 });
 
+//add note
 router.post("/notes", async (req, res) => {
-  const headerToken = req.headers.authorization;
-  const token = headerToken.replace("Bearer ", "");
+  const token = req.headers.authorization;
   const { title, text } = req.body;
   const newNote = { title, text };
   try {
@@ -91,11 +97,12 @@ router.post("/notes", async (req, res) => {
           return;
         }
         //create date & adds userId to the note
-        const createdAt = new Date();
-        const modifiedAt = createdAt;
+        const createdAt = createDate.createDate();
+        const modifiedAt = createDate.createDate();
         newNote.createdAt = createdAt;
         newNote.modifiedAt = modifiedAt;
         newNote.userId = tokenData.id;
+        newNote.id = uuidv4();
         console.log(createdAt);
 
         //adds note to notes.db
@@ -111,22 +118,29 @@ router.post("/notes", async (req, res) => {
     return;
   }
 });
-
+//update note with note._id, title and text from req.body
 router.put("/notes", async (req, res) => {
   const { _id, title, text } = req.body;
   const newNoteInfo = { _id, title, text };
-  const headerToken = req.headers.authorization;
-  const token = headerToken.replace("Bearer ", "");
+  const token = req.headers.authorization;
   try {
     const tokenData = jwt.isTokenValid(token);
     //if token i valid we search for note and sends the founded note toghether with the new info.
     if (tokenData) {
       try {
+        if (!title || !text) {
+          res
+            .status(418)
+            .json({ error: "both title and text are required, try again" });
+          return;
+        }
         const foundedNote = await db.searchNote(newNoteInfo);
         if (!foundedNote) {
           res.status(404).json({ message: "No note found with given id" });
           return;
         }
+
+        //if everything is correct with token, title, text we updates the db with the new note info
         const updatedNote = await db.updateNote(foundedNote, newNoteInfo);
         res
           .status(200)
@@ -142,10 +156,8 @@ router.put("/notes", async (req, res) => {
 
 router.delete("/notes", async (req, res) => {
   const { _id } = req.body;
-  const headerToken = req.headers.authorization;
-  const token = headerToken.replace("Bearer ", "");
+  const token = req.headers.authorization;
   const noteId = { _id };
-
   try {
     const tokenData = jwt.isTokenValid(token);
     if (tokenData) {
@@ -168,12 +180,11 @@ router.delete("/notes", async (req, res) => {
   }
 });
 
+// route to search for title.
 router.get("/notes/search", async (req, res) => {
   const { title } = req.query;
   const noteTitle = { title };
-  const headerToken = req.headers.authorization;
-  const token = headerToken.replace("Bearer ", "");
-
+  const token = req.headers.authorization;
   try {
     const tokenData = jwt.isTokenValid(token);
     if (tokenData) {
