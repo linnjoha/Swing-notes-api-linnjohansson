@@ -10,17 +10,20 @@ const { v4: uuidv4 } = require("uuid");
 router.post("/user/signup", async (req, res) => {
   const { username, password } = req.body;
   try {
+    //if not both name and password is given
     if (!username || !password) {
       res
         .status(418)
         .json({ error: "both username and password are required, try again" });
       return;
     }
+    //check if username already exists
     const userNameTaken = await db.findUser(username);
     if (userNameTaken) {
       res.status(400).json({ message: "Username already exists" });
       return;
     }
+    //creates a hashed password
     const hashedPassword = await bcrypt.hashPassword(password);
     const newUser = await db.addUser(username, hashedPassword);
     res.status(200).json({
@@ -32,7 +35,7 @@ router.post("/user/signup", async (req, res) => {
   }
 });
 
-//login account
+//login on account
 router.post("/user/login", async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -61,6 +64,7 @@ router.post("/user/login", async (req, res) => {
 });
 
 //endpoints for notes
+//get all the notes in notes.db
 router.get("/notes", async (req, res) => {
   const token = req.headers.authorization;
 
@@ -74,7 +78,6 @@ router.get("/notes", async (req, res) => {
         res.status(500).json({ error: "internal server problems" });
       }
     }
-    // const notes = db.findAllNotes();
   } catch (error) {
     res.status(400).json({ error: "invalid token" });
   }
@@ -87,13 +90,22 @@ router.post("/notes", async (req, res) => {
   const newNote = { title, text };
   try {
     const tokenData = jwt.isTokenValid(token);
-    console.log(tokenData);
+
     if (tokenData) {
       try {
+        //if not both title and text are added
         if (!title || !text) {
           res
             .status(418)
             .json({ error: "both title and text are required, try again" });
+          return;
+        }
+        //if the title or text is to long
+        if (newNote.title.length > 50 || newNote.text.length > 300) {
+          res.status(418).json({
+            message:
+              "Maxlength on title is 50 and on text is 300. Less is more!",
+          });
           return;
         }
         //create date & adds userId to the note
@@ -103,7 +115,6 @@ router.post("/notes", async (req, res) => {
         newNote.modifiedAt = modifiedAt;
         newNote.userId = tokenData.id;
         newNote.id = uuidv4();
-        console.log(createdAt);
 
         //adds note to notes.db
         const addedNote = await db.addNote(newNote);
@@ -134,6 +145,14 @@ router.put("/notes", async (req, res) => {
             .json({ error: "both title and text are required, try again" });
           return;
         }
+        //check the length on title and text
+        if (newNote.title.length > 50 || newNote.text.length > 300) {
+          res.status(418).json({
+            message:
+              "Maxlength on title is 50 and on text is 300. Less is more!",
+          });
+          return;
+        }
         const foundedNote = await db.searchNote(newNoteInfo);
         if (!foundedNote) {
           res.status(404).json({ message: "No note found with given id" });
@@ -154,12 +173,15 @@ router.put("/notes", async (req, res) => {
   }
 });
 
+//delete note route
+
 router.delete("/notes", async (req, res) => {
   const { _id } = req.body;
   const token = req.headers.authorization;
   const noteId = { _id };
   try {
     const tokenData = jwt.isTokenValid(token);
+    //if we have a valid token it searches for the note, if not found, status 404, else it deletes from the db.
     if (tokenData) {
       try {
         const foundedNote = await db.searchNote(noteId);
@@ -190,7 +212,7 @@ router.get("/notes/search", async (req, res) => {
     if (tokenData) {
       try {
         const foundedNote = await db.searchNote(noteTitle);
-        console.log(foundedNote);
+        //if no note with given title is found
         if (!foundedNote) {
           res.status(404).json({
             message: "no note could be found, try search with full title",
